@@ -1,0 +1,421 @@
+"use client";
+
+require('dotenv').config();
+import React, { useState, useEffect } from 'react';
+import { Folder, File, Trash2, Upload, RefreshCw } from 'lucide-react';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { 
+  S3Client, 
+  PutObjectCommand, 
+  GetObjectCommand, 
+  DeleteObjectCommand,
+  ListObjectsV2Command
+} from "@aws-sdk/client-s3";
+// import { log } from 'console';
+
+
+// class S3Service {
+//   private s3Client: S3Client;
+
+//   constructor() {
+//     this.s3Client = new S3Client({
+//       region: process.env.AWS_REGION || 'us-east-1',
+//       credentials: {
+//         accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+//         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
+//       }
+//     });
+//   }
+
+//   async uploadFile(bucket: string, key: string, body: Buffer | Readable | ReadableStream | Blob) {
+//     const command = new PutObjectCommand({
+//       Bucket: bucket,
+//       Key: key,
+//       Body: body
+//     });
+
+//     try {
+//       const response = await this.s3Client.send(command);
+//       return response;
+//     } catch (error) {
+//       console.error('Error uploading file to S3:', error);
+//       throw error;
+//     }
+//   }
+
+//   async downloadFile(bucket: string, key: string) {
+//     const command = new GetObjectCommand({
+//       Bucket: bucket,
+//       Key: key
+//     });
+
+//     try {
+//       const response = await this.s3Client.send(command);
+//       return response.Body;
+//     } catch (error) {
+//       console.error('Error downloading file from S3:', error);
+//       throw error;
+//     }
+//   }
+
+//   async deleteFile(bucket: string, key: string) {
+//     const command = new DeleteObjectCommand({
+//       Bucket: bucket,
+//       Key: key
+//     });
+
+//     try {
+//       const response = await this.s3Client.send(command);
+//       return response;
+//     } catch (error) {
+//       console.error('Error deleting file from S3:', error);
+//       throw error;
+//     }
+//   }
+
+//   async listObjects(bucket: string, prefix?: string) {
+//     const command = new ListObjectsV2Command({
+//       Bucket: bucket,
+//       Prefix: prefix
+//     });
+
+//     try {
+//       const response = await this.s3Client.send(command);
+//       return response.Contents || [];
+//     } catch (error) {
+//       console.error('Error listing objects in S3 bucket:', error);
+//       throw error;
+//     }
+//   }
+  
+// }
+
+
+
+// Mock S3 service to simulate interactions
+
+class S3Service {
+  constructor() {
+    this.s3Client = new S3Client({
+      region: process.env.AWS_REGION || 'eu-central-2',
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+      },
+      endpoint: process.env.AWS_ENDPOINT
+    });
+  }
+
+  async uploadFile(bucket, key, body) {
+    const command = new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: body
+    });
+
+    try {
+      const response = await this.s3Client.send(command);
+      return response;
+    } catch (error) {
+      console.error('Error uploading file to S3:', error);
+      throw error;
+    }
+  }
+
+  async downloadFile(bucket, key) {
+    const command = new GetObjectCommand({
+      Bucket: bucket,
+      Key: key
+    });
+
+    try {
+      const response = await this.s3Client.send(command);
+      return response.Body;
+    } catch (error) {
+      console.error('Error downloading file from S3:', error);
+      throw error;
+    }
+  }
+
+  async deleteFile(bucket, key) {
+    const command = new DeleteObjectCommand({
+      Bucket: bucket,
+      Key: key
+    });
+
+    try {
+      const response = await this.s3Client.send(command);
+      return response;
+    } catch (error) {
+      console.error('Error deleting file from S3:', error);
+      throw error;
+    }
+  }
+
+  async listObjects(bucket, prefix = null) {
+    const command = new ListObjectsV2Command({
+      Bucket: bucket,
+      Prefix: prefix
+    });
+
+    try {
+      debugger;
+      const response = await this.s3Client.send(command);
+      return response.Contents || [];
+    } catch (error) {
+      console.error('Error listing objects in S3 bucket:', error);
+      throw error;
+    }
+  }
+}
+
+
+const mockS3Service = {
+  buckets: [
+    { name: 'macq-ds-torres', region: 'eu-central-2' },
+  ],
+  
+  objects: {
+    'example-bucket-1': [
+      { key: 'documents/report.pdf', size: 1024 * 1024, lastModified: new Date('2024-01-15') },
+      { key: 'images/logo.png', size: 256 * 1024, lastModified: new Date('2024-02-20') },
+    ],
+    'example-bucket-2': [
+      { key: 'backups/database.zip', size: 4 * 1024 * 1024, lastModified: new Date('2024-03-10') }
+    ]
+  },
+
+  listBuckets: async () => {
+    return mockS3Service.buckets;
+  },
+
+  listObjects: async (bucketName) => {
+    console.log(new S3Service().listObjects(bucketName));
+    return new S3Service().listObjects(bucketName) || [];
+  },
+
+  deleteObject: async (bucketName, objectKey) => {
+    const bucketObjects = mockS3Service.objects[bucketName];
+    if (bucketObjects) {
+      mockS3Service.objects[bucketName] = bucketObjects.filter(obj => obj.key !== objectKey);
+    }
+    return true;
+  },
+
+  uploadObject: async (bucketName, file) => {
+    if (!mockS3Service.objects[bucketName]) {
+      mockS3Service.objects[bucketName] = [];
+    }
+    
+    mockS3Service.objects[bucketName].push({
+      key: file.name,
+      size: file.size,
+      lastModified: new Date()
+    });
+    return true;
+  }
+};
+
+// Utility function to format file size
+const formatFileSize = (bytes) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+};
+
+const S3BucketManager = () => {
+  const [buckets, setBuckets] = useState([]);
+  const [selectedBucket, setSelectedBucket] = useState(null);
+  const [objects, setObjects] = useState([]);
+  const [uploadFile, setUploadFile] = useState(null);
+
+  // Fetch buckets on component mount
+  useEffect(() => {
+    const fetchBuckets = async () => {
+      try {
+        const fetchedBuckets = await mockS3Service.listBuckets();
+        setBuckets(fetchedBuckets);
+        
+        // Auto-select first bucket if available
+        if (fetchedBuckets.length > 0) {
+          setSelectedBucket(fetchedBuckets[0].name);
+        }
+      } catch (error) {
+        console.error('Error fetching buckets:', error);
+      }
+    };
+
+    fetchBuckets();
+  }, []);
+
+  // Fetch objects when selected bucket changes
+  useEffect(() => {
+    const fetchObjects = async () => {
+      if (selectedBucket) {
+        try {
+          console.log({
+            env: process.env,
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+            endpoint: process.env.AWS_ENDPOINT,
+          });
+          const fetchedObjects = await mockS3Service.listObjects(selectedBucket);
+          setObjects(fetchedObjects);
+        } catch (error) {
+          console.error('Error fetching objects:', error);
+          setObjects([]);
+        }
+      }
+    };
+
+    fetchObjects();
+  }, [selectedBucket]);
+
+  // Handle bucket selection
+  const handleBucketSelect = (bucketName) => {
+    setSelectedBucket(bucketName);
+  };
+
+  // Handle file upload
+  const handleFileUpload = async () => {
+    if (uploadFile && selectedBucket) {
+      try {
+        await mockS3Service.uploadObject(selectedBucket, uploadFile);
+        // Refresh objects list
+        const fetchedObjects = await mockS3Service.listObjects(selectedBucket);
+        setObjects(fetchedObjects);
+        // Clear upload file
+        setUploadFile(null);
+      } catch (error) {
+        console.error('Error uploading file:', error);
+      }
+    }
+  };
+
+  // Handle object deletion
+  const handleDeleteObject = async (objectKey) => {
+    if (selectedBucket) {
+      try {
+        await mockS3Service.deleteObject(selectedBucket, objectKey);
+        // Refresh objects list
+        const fetchedObjects = await mockS3Service.listObjects(selectedBucket);
+        setObjects(fetchedObjects);
+      } catch (error) {
+        console.error('Error deleting object:', error);
+      }
+    }
+  };
+
+  return (
+    <Card className="w-full max-w-4xl mx-auto">
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <span>S3 Bucket Manager</span>
+          <Button variant="outline" size="sm">
+            <RefreshCw className="mr-2" /> Refresh
+          </Button>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex">
+        {/* Bucket List */}
+        <div className="w-1/4 pr-4 border-r">
+          <h3 className="font-semibold mb-2">Buckets</h3>
+          <div className="space-y-2">
+            {buckets.map((bucket) => (
+              <div 
+                key={bucket.name}
+                className={`p-2 cursor-pointer rounded ${
+                  selectedBucket === bucket.name 
+                    ? 'bg-blue-100 border-blue-500 border' 
+                    : 'hover:bg-gray-100'
+                }`}
+                onClick={() => handleBucketSelect(bucket.name)}
+              >
+                <Folder className="inline-block mr-2" />
+                {bucket.name}
+                <span className="text-xs text-gray-500 block">{bucket.region}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Object List */}
+        <div className="w-3/4 pl-4">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-semibold">
+              Objects in {selectedBucket || 'Select a Bucket'}
+            </h3>
+            
+            {/* File Upload Section */}
+            <div className="flex items-center space-x-2">
+              <Input 
+                type="file" 
+                onChange={(e) => setUploadFile(e.target.files[0])}
+                className="w-64"
+              />
+              <Button 
+                onClick={handleFileUpload} 
+                disabled={!uploadFile || !selectedBucket}
+                className="flex items-center"
+              >
+                <Upload className="mr-2" /> Upload
+              </Button>
+            </div>
+          </div>
+
+          {/* Objects Table */}
+          <div className="border rounded">
+            <table className="w-full">
+              <thead className="bg-gray-100 border-b">
+                <tr>
+                  <th className="p-2 text-left">Name</th>
+                  <th className="p-2 text-right">Size</th>
+                  <th className="p-2 text-right">Last Modified</th>
+                  <th className="p-2 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {objects.length === 0 ? (
+                  <tr>
+                    <td colSpan="4" className="text-center p-4 text-gray-500">
+                      No objects in this bucket
+                    </td>
+                  </tr>
+                ) : (
+                  objects.map((object) => (
+                    <tr key={object.key} className="border-b hover:bg-gray-50">
+                      <td className="p-2">
+                        <File className="inline-block mr-2 text-blue-500" />
+                        {object.key}
+                      </td>
+                      <td className="p-2 text-right">
+                        {formatFileSize(object.size)}
+                      </td>
+                      <td className="p-2 text-right">
+                        {object.lastModified.toLocaleDateString()}
+                      </td>
+                      <td className="p-2 text-right">
+                        <Button 
+                          variant="destructive" 
+                          size="sm"
+                          onClick={() => handleDeleteObject(object.key)}
+                        >
+                          <Trash2 className="mr-2" /> Delete
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default S3BucketManager;

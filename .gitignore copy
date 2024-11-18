@@ -1,0 +1,7 @@
+**/node_modules/
+mlruns/
+output/
+s3-bucket-manager/
+wandb/
+*.pyc
+data/
